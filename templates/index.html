@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Weather Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background-color: #eef6fb;
+        padding: 20px;
+        text-align: center;
+    }
+    h1 {
+        color: #333;
+        font-size: 2em;
+    }
+    #status {
+        margin: 10px 0;
+        font-size: 1.1em;
+        color: #555;
+    }
+    button {
+        margin: 5px;
+        padding: 10px 20px;
+        font-size: 1em;
+        background-color: #4285F4;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    button:hover {
+        background-color: #306acb;
+    }
+    #cardContainer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .weather-card {
+        width: 140px;
+        margin: 10px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        padding: 10px;
+        text-align: center;
+        transition: transform 0.3s;
+    }
+    .weather-card:hover {
+        transform: scale(1.05);
+    }
+    .weather-card img {
+        width: 50px;
+        height: 50px;
+    }
+    canvas {
+        margin-top: 20px;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        padding: 10px;
+        max-width: 100%;
+        height: auto;
+    }
+    .chart {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Very High Level Responsive Media Queries */
+    @media (max-width: 1200px) {
+        h1 {
+            font-size: 1.8em;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 0.95em;
+        }
+        .weather-card {
+            width: 150px;
+            margin: 8px;
+        }
+    }
+
+    @media (max-width: 992px) {
+        #cardContainer {
+            flex-direction: row;
+        }
+        .weather-card {
+            width: 120px;
+            margin: 6px;
+        }
+        canvas {
+            width: 90%;
+        }
+    }
+
+    @media (max-width: 768px) {
+        h1 {
+            font-size: 1.5em;
+        }
+        button {
+            padding: 7px 14px;
+            font-size: 0.9em;
+        }
+        .weather-card {
+            width: 120px;
+        }
+        canvas {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 576px) {
+        #cardContainer {
+            flex-direction: column;
+            align-items: center;
+        }
+        .weather-card {
+            width: 120%;
+        }
+        canvas {
+            width: 95%;
+        }
+    }
+
+    @media (max-width: 400px) {
+        h1 {
+            font-size: 1.3em;
+        }
+        button {
+            width: 90%;
+            margin: 5px 0;
+        }
+        .weather-card {
+            width: 120%;
+        }
+        canvas {
+            width: 100%;
+        }
+    }
+
+    footer {
+    margin-top: 40px;
+    padding: 20px;
+    background: #4285F4;
+    color: white;
+    font-size: 1em;
+    text-align: center;
+}
+
+footer .dev-link {
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+footer .dev-link:hover {
+    color: #ffd700;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.modal-content {
+    background: white;
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: left;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px; right: 15px;
+    cursor: pointer;
+    font-size: 20px;
+    color: #333;
+}
+
+a {
+    text-decoration: none;
+    color: #0066cc;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+</style>
+
+</head>
+<body>
+
+    <h1>Weather Dashboard</h1>
+    <p id="status">Detecting your location...</p>
+    <div>
+        <button onclick="loadToday()">Today's Hourly</button>
+        <button onclick="loadForecast()">Future 7-Day Forecast</button>
+        <button onclick="loadPast()">Past Days</button>
+    </div>
+    <div id="cardContainer"></div>
+    <div class="chart">
+    <canvas id="weatherChart" width="600" height="400"></canvas></div>
+
+    <script>
+        let lat, lon;
+        let ctx = document.getElementById('weatherChart').getContext('2d');
+        let chart;
+
+        function drawChart(labels, data, label) {
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    plugins: { legend: { display: true, position: 'top' }},
+                    scales: {
+                        x: { title: { display: true, text: 'Time'} },
+                        y: { title: { display: true, text: 'Temperature (°C)' } }
+                    }
+                }
+            });
+        }
+
+        function displayCards(data) {
+            const container = document.getElementById('cardContainer');
+            container.innerHTML = ''; // clear previous
+            data.forEach(d => {
+                const card = document.createElement('div');
+                card.className = 'weather-card';
+                card.innerHTML = `
+                    <p><strong>${d.date}</strong></p>
+                    <p>${d.time || ''}</p>
+                    <img src="https://openweathermap.org/img/wn/${d.icon}@2x.png" alt="icon">
+                    <p>${d.temp}°C</p>
+                    <p>${d.desc}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+function loadToday() {
+    fetch('/get_hourly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lon })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) return document.getElementById('status').innerText = data.error;
+
+        displayCards(data.today);
+        let labels = data.today.map(d => d.time);
+        let temps = data.today.map(d => d.temp);
+        drawChart(labels, temps, "Today's Hourly Weather");
+
+        // Display summary
+        const summary = data.summary;
+        let summaryText = '<h3>Today\'s Weather Summary:</h3>';
+        summary.forEach(item => {
+            summaryText += `<p>${item.desc}: ${item.percent}%</p>`;
+        });
+        document.getElementById('status').innerHTML = summaryText;
+    });
+}
+
+
+        function loadForecast() {
+            fetch('/get_forecast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat, lon })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) return document.getElementById('status').innerText = data.error;
+                displayCards(data.forecast);
+                let labels = data.forecast.map(d => d.date);
+                let temps = data.forecast.map(d => d.temp);
+                drawChart(labels, temps, "7-Day Forecast");
+            });
+        }
+
+       function loadPast() {
+    fetch('/get_past', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lon })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.past.some(d => d.temp === null)) {
+            document.getElementById('status').innerText = "Past data unavailable on Free Plan.";
+            setTimeout(() => { document.getElementById('status').innerText = ''; }, 3000); // hides after 3 sec
+            return;
+        }
+        displayCards(data.past);
+        let labels = data.past.map(d => d.date);
+        let temps = data.past.map(d => d.temp);
+        drawChart(labels, temps, "Past 7 Days Weather");
+    });
+}
+
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                lat = pos.coords.latitude;
+                lon = pos.coords.longitude;
+                document.getElementById('status').innerText = 'Location detected!';
+                loadToday();
+            }, err => {
+                document.getElementById('status').innerText = 'Location access denied.';
+            });
+        } else {
+            document.getElementById('status').innerText = 'Geolocation not supported.';
+        }
+
+//footer
+function showDeveloperInfo() {
+    document.getElementById('devModal').style.display = 'block';
+}
+
+function closeDeveloperInfo() {
+    document.getElementById('devModal').style.display = 'none';
+}
+        
+    </script>
+<footer>
+    @2025 Weather Forecasting<br>Developed by: 
+    <span class="dev-link" onclick="showDeveloperInfo()">shri aigal</span>
+</footer>
+
+<!-- Developer Info Modal -->
+<div id="devModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeDeveloperInfo()">&times;</span>
+        <h2>Developer Info</h2>
+        <p><strong>Name:</strong> A S Shridatta Aigal</p>
+        <p><img src="https://img.icons8.com/color/24/gmail.png"/> Gmail: <a href="mailto:shriaigal@gmail.com">shriaigal@gmail.com</a></p>
+        <p><img src="https://img.icons8.com/ios-glyphs/24/github.png"/> GitHub: <a href="https://github.com/shriaigal" target="_blank">github.com/shriaigal</a></p>
+        <p><img src="https://img.icons8.com/fluency/24/instagram-new.png"/> Instagram: <a href="https://instagram.com/shri_aigal" target="_blank">@shri_aigal</a></p>
+    </div>
+</div>
+
+
+</body>
+</html>
